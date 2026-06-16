@@ -1,24 +1,18 @@
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-
-
-def create_embeddings() -> HuggingFaceEmbeddings:
-    return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
-
+from langchain_chroma import Chroma
+from app.config import settings
+from app.embeddings import get_embeddings
 
 def load_vector_store() -> Chroma:
-    embeddings = create_embeddings()
+    embeddings = get_embeddings()
 
     return Chroma(
-        persist_directory="chroma_db",
-        collection_name="compliance_rules",
+        persist_directory=settings.chroma_dir,
+        collection_name=settings.collection_name,
         embedding_function=embeddings,
     )
 
 
-def search_rules(query: str, top_k: int = 5) -> None:
+def search_rules(query: str, top_k: int = settings.top_k) -> None:
     vector_store = load_vector_store()
 
     results = vector_store.similarity_search_with_score(

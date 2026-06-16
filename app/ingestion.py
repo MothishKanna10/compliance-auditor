@@ -1,9 +1,11 @@
+import os
 from pathlib import Path
 
+from app.config import settings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+from app.embeddings import get_embeddings
+from langchain_chroma import Chroma
 
 
 def load_documents(data_dir: str) -> list:
@@ -20,23 +22,21 @@ def load_documents(data_dir: str) -> list:
 
 def split_documents(documents: list) -> list:
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=150,
-    )
+    chunk_size=settings.chunk_size,
+    chunk_overlap=settings.chunk_overlap,
+)
 
     return splitter.split_documents(documents)
 
 
 def create_vector_store(chunks: list) -> None:
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
+    embeddings = get_embeddings()
 
     vector_store = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
-        persist_directory="chroma_db",
-        collection_name="compliance_rules",
+        persist_directory=settings.chroma_dir,
+        collection_name=settings.collection_name,
     )
 
     vector_store.persist()
@@ -46,7 +46,9 @@ def create_vector_store(chunks: list) -> None:
 
 def main() -> None:
     print("Loading PDFs...")
-    documents = load_documents("data")
+    documents = load_documents(
+    os.getenv("DATA_DIR", "data")
+)
 
     print(f"Pages loaded: {len(documents)}")
 

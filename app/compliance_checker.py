@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from ollama import chat
-
-from models import EvidenceItem
-from retriever import load_vector_store
+from app.llm import get_llm
+from app.models import EvidenceItem
+from app.retriever import load_vector_store
 
 
 def retrieve_relevant_rules(
@@ -43,7 +42,10 @@ def retrieve_relevant_rules(
             }
         )
 
-    return "\n\n".join(context_parts), evidence
+    return (
+        "\n\n".join(context_parts),
+        evidence,
+    )
 
 
 def build_audit_prompt(
@@ -109,7 +111,9 @@ def format_evidence(
     evidence: list[EvidenceItem],
 ) -> str:
     if not evidence:
-        return "No evidence returned."
+        return (
+            "No evidence returned."
+        )
 
     seen: set[tuple[str, str]] = set()
 
@@ -129,7 +133,8 @@ def format_evidence(
         lines.append(
             f"- Source: {item['source']} "
             f"| Page: {item['page']} "
-            f"| Similarity Score: {item.get('score', 'N/A')}"
+            f"| Similarity Score: "
+            f"{item.get('score', 'N/A')}"
         )
 
     return "\n".join(lines)
@@ -138,9 +143,11 @@ def format_evidence(
 def audit_draft_document(
     draft_text: str,
 ) -> str:
-    regulatory_context, evidence = retrieve_relevant_rules(
-        draft_text=draft_text,
-        top_k=10,
+    regulatory_context, evidence = (
+        retrieve_relevant_rules(
+            draft_text=draft_text,
+            top_k=10,
+        )
     )
 
     if not regulatory_context:
@@ -154,19 +161,11 @@ def audit_draft_document(
         regulatory_context=regulatory_context,
     )
 
-    response = chat(
-        model="llama3.2:3b",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
-    )
+    llm = get_llm()
 
-    answer = str(
-        response["message"]["content"]
-    )
+    response = llm.invoke(prompt)
+
+    answer = response.content
 
     evidence_text = format_evidence(
         evidence
@@ -181,10 +180,13 @@ def audit_draft_document(
 
 def main() -> None:
     print(
-        "Paste a draft business/privacy document below."
+        "Paste a draft business/privacy "
+        "document below."
     )
+
     print(
-        "Type END on a new line when finished.\n"
+        "Type END on a new line "
+        "when finished.\n"
     )
 
     lines: list[str] = []
@@ -192,16 +194,22 @@ def main() -> None:
     while True:
         line = input()
 
-        if line.strip().upper() == "END":
+        if (
+            line.strip().upper()
+            == "END"
+        ):
             break
 
         lines.append(line)
 
-    draft_text = "\n".join(lines).strip()
+    draft_text = (
+        "\n".join(lines).strip()
+    )
 
     if not draft_text:
         print(
-            "Draft document cannot be empty."
+            "Draft document "
+            "cannot be empty."
         )
         return
 
