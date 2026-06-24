@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, TypedDict
-
-
-Severity = Literal["Low", "Medium", "High"]
+from typing import TypedDict
 
 
 class Evidence(TypedDict):
@@ -13,17 +10,10 @@ class Evidence(TypedDict):
     score: float
 
 
-class AuditFinding(TypedDict):
-    regulation: str
-    issue: str
-    severity: Severity
-    evidence: str
-    recommendation: str
-    confidence: float
-
-
 class AuditState(TypedDict):
     draft: str
     evidence: list[Evidence]
-    findings: list[AuditFinding]
+    findings: list[str]
     final_answer: str
+    confidence: str
+    retry_count: int

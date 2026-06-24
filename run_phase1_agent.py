@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from agents.agent_state import AuditState
-from agents.compliance_graph import build_phase1_compliance_graph
+from agents.compliance_graph import build_phase3_graph
 
 
 async def main() -> None:
@@ -20,13 +20,13 @@ async def main() -> None:
         "evidence": [],
         "findings": [],
         "final_answer": "",
+        "confidence": "",
+        "retry_count": 0,
     }
 
-    graph = build_phase1_compliance_graph()
+    graph = build_phase3_graph()
 
     result = await graph.ainvoke(initial_state)
-
-    print("\n========== FINAL AUDIT ==========\n")
 
     print(result["final_answer"])
 
