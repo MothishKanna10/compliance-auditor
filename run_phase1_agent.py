@@ -24,11 +24,6 @@ async def main() -> None:
         "retry_count": 0,
     }
 
-    graph = build_phase3_graph()
-
-    result = await graph.ainvoke(initial_state)
-
-    print(result["final_answer"])
 
 
 if __name__ == "__main__":
