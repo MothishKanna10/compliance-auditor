@@ -13,7 +13,6 @@ class Evidence(TypedDict):
 class AuditState(TypedDict):
     draft: str
     evidence: list[Evidence]
-    findings: list[str]
     final_answer: str
     confidence: str
     retry_count: int

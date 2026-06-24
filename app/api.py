@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, File, HTTPException, UploadFile
 
+from app.document_parser import extract_text_from_uploaded_file
 from app.schemas import AuditRequest, AuditResponse
 from app.services.audit_service import run_audit
 
@@ -28,6 +29,34 @@ async def audit_document(
     result = await run_audit(
         request.document_text,
     )
+
+    return AuditResponse(
+        report=result["report"],
+        confidence=result["confidence"],
+    )
+
+
+@app.post(
+    "/audit/file",
+    response_model=AuditResponse,
+)
+async def audit_file(
+    file: UploadFile = File(...),
+) -> AuditResponse:
+    file_bytes = await file.read()
+
+    try:
+        document_text = extract_text_from_uploaded_file(
+            file.filename or "",
+            file_bytes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if not document_text.strip():
+        raise HTTPException(status_code=422, detail="File appears to be empty or contains no extractable text.")
+
+    result = await run_audit(document_text)
 
     return AuditResponse(
         report=result["report"],

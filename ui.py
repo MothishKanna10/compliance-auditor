@@ -2,7 +2,7 @@ import requests
 import streamlit as st
 
 
-API_URL = "http://127.0.0.1:8000/audit"
+BASE_URL = "http://127.0.0.1:8000"
 
 st.set_page_config(
     page_title="AI Compliance Auditor",
@@ -20,45 +20,70 @@ Audit documents against:
 """
 )
 
-document_text = st.text_area(
-    "Paste document text",
-    height=300,
-)
+upload_tab, paste_tab = st.tabs(["Upload File", "Paste Text"])
 
-if st.button("Run Audit"):
+with upload_tab:
+    uploaded_file = st.file_uploader(
+        "Upload a document (PDF, DOCX, or TXT)",
+        type=["pdf", "docx", "txt"],
+    )
 
-    if not document_text.strip():
-        st.warning("Please enter a document.")
-        st.stop()
+    if st.button("Run Audit", key="audit_file"):
+        if uploaded_file is None:
+            st.warning("Please upload a file.")
+            st.stop()
 
-    with st.spinner("Running compliance audit..."):
-
-        response = requests.post(
-            API_URL,
-            json={
-                "document_text": document_text,
-            },
-            timeout=300,
-        )
+        with st.spinner("Running compliance audit..."):
+            response = requests.post(
+                f"{BASE_URL}/audit/file",
+                files={
+                    "file": (
+                        uploaded_file.name,
+                        uploaded_file.getvalue(),
+                        uploaded_file.type,
+                    )
+                },
+                timeout=300,
+            )
 
         if response.status_code != 200:
-            st.error(
-                f"API Error: {response.text}"
-            )
+            st.error(f"API Error: {response.json().get('detail', response.text)}")
             st.stop()
 
         result = response.json()
 
-    st.subheader("Confidence")
+        st.subheader("Confidence")
+        st.write(result["confidence"])
 
-    st.write(
-        result["confidence"]
+        st.subheader("Audit Report")
+        st.text_area("", value=result["report"], height=500, key="report_file")
+
+with paste_tab:
+    document_text = st.text_area(
+        "Paste document text",
+        height=300,
     )
 
-    st.subheader("Audit Report")
+    if st.button("Run Audit", key="audit_text"):
+        if not document_text.strip():
+            st.warning("Please enter a document.")
+            st.stop()
 
-    st.text_area(
-        "",
-        value=result["report"],
-        height=500,
-    )
+        with st.spinner("Running compliance audit..."):
+            response = requests.post(
+                f"{BASE_URL}/audit",
+                json={"document_text": document_text},
+                timeout=300,
+            )
+
+        if response.status_code != 200:
+            st.error(f"API Error: {response.text}")
+            st.stop()
+
+        result = response.json()
+
+        st.subheader("Confidence")
+        st.write(result["confidence"])
+
+        st.subheader("Audit Report")
+        st.text_area("", value=result["report"], height=500, key="report_text")

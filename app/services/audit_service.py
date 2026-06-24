@@ -9,7 +9,6 @@ async def run_audit(
     initial_state: AuditState = {
         "draft": document_text,
         "evidence": [],
-        "findings": [],
         "final_answer": "",
         "confidence": "",
         "retry_count": 0,
