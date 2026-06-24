@@ -17,27 +17,40 @@ def get_vector_store() -> Chroma:
     )
 
 
+def _draft_sentences(draft: str) -> list[str]:
+    return [s.strip() for s in draft.splitlines() if s.strip()]
+
+
 async def retrieve_rules_node(state: AuditState) -> AuditState:
     vector_store = get_vector_store()
 
-    results = vector_store.similarity_search_with_score(
-        query=state["draft"],
-        k=settings.top_k,
-    )
+    sentences = _draft_sentences(state["draft"])
+    queries = sentences if sentences else [state["draft"]]
 
+    seen: set[str] = set()
     evidence: list[Evidence] = []
 
-    for document, score in results:
-        metadata = document.metadata
-
-        evidence.append(
-            {
-                "source": str(metadata.get("source", "unknown")),
-                "page": int(metadata.get("page", 0)),
-                "content": document.page_content,
-                "score": float(score),
-            }
+    for query in queries:
+        results = vector_store.similarity_search_with_score(
+            query=query,
+            k=settings.top_k,
         )
+
+        for document, score in results:
+            if document.page_content in seen:
+                continue
+
+            seen.add(document.page_content)
+            metadata = document.metadata
+
+            evidence.append(
+                {
+                    "source": str(metadata.get("source", "unknown")),
+                    "page": int(metadata.get("page", 0)),
+                    "content": document.page_content,
+                    "score": float(score),
+                }
+            )
 
     state["evidence"] = evidence
 
