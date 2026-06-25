@@ -4,12 +4,16 @@ from agents.agent_state import AuditState
 
 
 async def report_node(state: AuditState) -> AuditState:
-    report = f"""
-========== FINAL REPORT ==========
+    report = f"""COMPLIANCE AUDIT REPORT
+{'=' * 40}
 
-Confidence: {state['confidence']}
-
+AUDIT FINDINGS
+{'-' * 40}
 {state['final_answer']}
+
+REVIEWER ASSESSMENT
+{'-' * 40}
+{state.get('reviewer_notes', '')}
 """
 
     state["final_answer"] = report

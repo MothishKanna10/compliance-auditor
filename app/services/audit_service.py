@@ -10,6 +10,7 @@ async def run_audit(
         "draft": document_text,
         "evidence": [],
         "final_answer": "",
+        "reviewer_notes": "",
         "confidence": "",
         "retry_count": 0,
     }

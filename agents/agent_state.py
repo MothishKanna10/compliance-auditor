@@ -14,5 +14,6 @@ class AuditState(TypedDict):
     draft: str
     evidence: list[Evidence]
     final_answer: str
+    reviewer_notes: str
     confidence: str
     retry_count: int

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from langchain_ollama import ChatOllama
-
 from agents.agent_state import AuditState
 from app.config import settings
+from app.llm import get_llm
 
 
 def build_evidence_context(state: AuditState) -> str:
@@ -14,10 +13,7 @@ def build_evidence_context(state: AuditState) -> str:
 
 
 async def reviewer_agent_node(state: AuditState) -> AuditState:
-    llm = ChatOllama(
-        model=settings.llm_model,
-        temperature=0,
-    )
+    llm = get_llm()
 
     prompt = f"""
 You are a compliance review agent.
@@ -70,10 +66,6 @@ Reason:
         confidence = "Low"
 
     state["confidence"] = confidence
-
-    state["final_answer"] += (
-        "\n\n===== REVIEWER =====\n"
-        + review
-    )
+    state["reviewer_notes"] = review
 
     return state

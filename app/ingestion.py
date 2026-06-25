@@ -22,11 +22,13 @@ def load_documents(data_dir: str) -> list:
 
 def split_documents(documents: list) -> list:
     splitter = RecursiveCharacterTextSplitter(
-    chunk_size=settings.chunk_size,
-    chunk_overlap=settings.chunk_overlap,
-)
-
-    return splitter.split_documents(documents)
+        chunk_size=settings.chunk_size,
+        chunk_overlap=settings.chunk_overlap,
+    )
+    chunks = splitter.split_documents(documents)
+    # Filter out title pages, version headers, and table of contents entries
+    # that contain no actual obligation text (less than 150 meaningful characters)
+    return [c for c in chunks if len(c.page_content.strip()) >= 150]
 
 
 def create_vector_store(chunks: list) -> None:
@@ -38,8 +40,6 @@ def create_vector_store(chunks: list) -> None:
         persist_directory=settings.chroma_dir,
         collection_name=settings.collection_name,
     )
-
-    vector_store.persist()
 
     print("Vector database created successfully")
 
