@@ -1,8 +1,9 @@
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from app.document_parser import extract_text_from_uploaded_file
-from app.schemas import AuditRequest, AuditResponse
+from app.schemas import AuditRequest, AuditResponse, ChatRequest, ChatResponse
 from app.services.audit_service import run_audit
+from app.services.chat_service import run_chat
 
 
 app = FastAPI(
@@ -62,3 +63,13 @@ async def audit_file(
         report=result["report"],
         confidence=result["confidence"],
     )
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest) -> ChatResponse:
+    answer = await run_chat(
+        report=request.report,
+        messages=request.messages,
+        question=request.question,
+    )
+    return ChatResponse(answer=answer)

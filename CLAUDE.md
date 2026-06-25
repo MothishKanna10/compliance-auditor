@@ -4,98 +4,109 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is an AI-powered compliance auditing tool that checks documents against Australian regulatory frameworks (APP Guidelines, ASIC RG 271). It uses a LangGraph multi-agent workflow backed by a local LLM (Ollama) and a ChromaDB vector store for retrieval-augmented generation.
+An AI-powered compliance auditing tool that checks documents against Australian regulatory frameworks (APP Guidelines, ASIC RG 271). Uses a LangGraph multi-agent workflow, OpenAI GPT-4o-mini for LLM calls, OpenAI text-embedding-3-small for embeddings, and ChromaDB for vector storage.
 
 ## Running the App
 
-The system has two services that run concurrently:
+Two services must run concurrently:
 
 ```bash
-# 1. One-time: build the vector database from regulatory PDFs in data/
+# One-time: build the vector database from regulatory PDFs in data/
 python -m app.ingestion
 
-# 2. FastAPI backend (port 8000)
+# Terminal 1 — FastAPI backend (port 8000)
 python -m uvicorn app.api:app --host 127.0.0.1 --port 8000 --reload
 
-# 3. Streamlit frontend (port 8501) — in a separate terminal
+# Terminal 2 — Streamlit frontend (port 8501)
 streamlit run ui.py
 ```
 
-Individual CLI tools for manual testing:
-```bash
-python run_phase1_agent.py         # Test the full LangGraph agent workflow
-python -m app.compliance_checker   # Interactive document audit via CLI
-python -m app.auditor              # Compliance Q&A with context retrieval
-python -m app.retriever            # Semantic search testing against ChromaDB
-```
-
-There are no automated tests. Manual validation is done through the CLI entry points above.
+Re-run ingestion only when PDFs in `data/` change. ChromaDB persists to `chroma_db/`.
 
 ## Architecture
 
 ### Data Flow
 
 ```
-User document text
-  → [retrieval_node] Semantic search in ChromaDB → top-5 regulatory chunks
-  → [auditor_agent]  LLM analyzes document + evidence → findings
-  → [reviewer_agent] LLM validates + assigns confidence (High/Medium/Low)
-      ↳ If Low confidence and retry_count < 1: loop back to retrieval_node
-  → [report_node]    Format final report
-  → FastAPI /audit response → Streamlit UI
+User document (PDF / DOCX / TXT / pasted text)
+  → [retrieval_node] Query rewriting → per-sentence ChromaDB search → top-2 chunks per sentence
+  → [auditor_agent]  LLM analyses document + evidence → structured findings
+  → [reviewer_agent] LLM validates findings → confidence (High/Medium/Low)
+      ↳ If Low confidence and retry_count < 1: loop back with reviewer feedback
+  → [report_node]    Format final report (AUDIT FINDINGS + REVIEWER ASSESSMENT)
+  → FastAPI /audit or /audit/file response → Streamlit UI
+  → [/chat endpoint] Follow-up Q&A about the report (session-only, no persistence)
 ```
 
 ### Key Components
 
 | Layer | File(s) | Role |
 |---|---|---|
-| Workflow orchestration | `agents/compliance_graph.py` | LangGraph `StateGraph` wiring the 4-node DAG |
-| State schema | `agents/agent_state.py` | `TypedDict` shared across all nodes |
-| Retrieval | `agents/retrieval_node.py` | Queries ChromaDB, populates `evidence` in state |
-| Audit LLM call | `agents/auditor_agent.py` | Prompts LLM with document + evidence |
-| Review LLM call | `agents/reviewer_agent.py` | Validates findings, sets `confidence` and retry logic |
-| Report formatting | `agents/report_node.py` | Formats the final markdown report |
-| API entry point | `app/api.py` | FastAPI `/audit` POST endpoint |
+| Workflow orchestration | `agents/compliance_graph.py` | LangGraph `StateGraph` — 4-node DAG |
+| State schema | `agents/agent_state.py` | `AuditState` TypedDict shared across all nodes |
+| Retrieval | `agents/retrieval_node.py` | Sentence splitting, query rewriting, per-sentence ChromaDB search |
+| Audit LLM call | `agents/auditor_agent.py` | Prompts LLM with numbered sentences + evidence |
+| Review LLM call | `agents/reviewer_agent.py` | Validates findings, sets confidence, stores reviewer_notes |
+| Report formatting | `agents/report_node.py` | Formats two-section report |
+| API entry point | `app/api.py` | FastAPI `/audit`, `/audit/file`, `/chat` endpoints |
 | Audit orchestration | `app/services/audit_service.py` | Invokes the LangGraph workflow |
-| Vector DB setup | `app/ingestion.py` | PDF loading → chunking → embedding → ChromaDB |
-| LLM initialization | `app/llm.py` | Configures Ollama or OpenAI based on `.env` |
-| Embedding init | `app/embeddings.py` | HuggingFace `all-MiniLM-L6-v2` |
-| Frontend | `ui.py` | Streamlit form that POSTs to the FastAPI backend |
+| Chat service | `app/services/chat_service.py` | LLM Q&A using audit report as context |
+| Vector DB setup | `app/ingestion.py` | PDF loading → 150-char filter → chunking → ChromaDB |
+| LLM initialisation | `app/llm.py` | Returns ChatOpenAI or ChatOllama based on LLM_PROVIDER |
+| Embedding init | `app/embeddings.py` | Returns OpenAIEmbeddings or HuggingFaceEmbeddings |
+| Document parsing | `app/document_parser.py` | Extracts text from PDF, DOCX, TXT uploads |
+| Frontend | `ui.py` | Streamlit UI — upload/paste tabs, report display, chat interface |
 
 ### Configuration (`.env`)
 
-- `LLM_PROVIDER=llama` — uses local Ollama; set to `openai` to use GPT-4o
-- `LLM_MODEL=llama3.2:3b`
-- `EMBEDDING_PROVIDER=huggingface`
-- `CHUNK_SIZE=1000`, `CHUNK_OVERLAP=150`, `TOP_K=5`
+```
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+OPENAI_API_KEY=<your key>
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small
+CHUNK_SIZE=1000
+CHUNK_OVERLAP=150
+TOP_K=5
+CHROMA_PERSIST_DIR=chroma_db
+CHROMA_COLLECTION_NAME=compliance_rules
+DATA_DIR=data
+```
 
-Config is loaded via `app/config.py` using Pydantic `BaseSettings`.
+### Retrieval Pipeline
 
-### Vector Store
-
-ChromaDB is persisted to `chroma_db/`. Re-run `python -m app.ingestion` whenever PDFs in `data/` change. The store is queried at runtime by `app/retriever.py`, which is called from `agents/retrieval_node.py`.
+1. **Sentence splitting** — splits any document format (paragraphs, bullets, numbered sections) into individual sentences. Capped at 40 sentences.
+2. **Query rewriting** — one LLM call rewrites all sentences into legal search queries (e.g. "We may share with third parties" → "use or disclose personal information to third parties APP 6"). Fixes vocabulary mismatch between plain English and legal text.
+3. **Per-sentence search** — top-2 ChromaDB chunks per sentence (not global top-k), so every sentence gets relevant evidence from the right chapter.
+4. **Retry with feedback** — if reviewer assigns Low confidence, loops back with reviewer notes to generate more targeted queries.
 
 ### Regulatory Scope
 
-The regulatory documents in `data/` cover:
-- **APP Guidelines** — Australian Privacy Principles (APP 1, 5, 6, 11)
-- **ASIC RG 271** — Internal Dispute Resolution standards
+PDFs in `data/` cover all 13 APP chapters (individual files per chapter) + ASIC RG 271:
+- **APP 1** — Open and transparent management
+- **APP 3** — Collection of solicited personal information
+- **APP 5** — Notification of collection
+- **APP 6** — Use or disclosure of personal information
+- **APP 11** — Security of personal information
+- **APP 12** — Access to personal information
+- **APP 13** — Correction of personal information
+- *(APP 2, 4, 7, 8, 9, 10 also ingested)*
+- **ASIC RG 271** — Internal Dispute Resolution
 
 ## Current Progress
 
 **Completed**
-- PDF ingestion pipeline (PyPDF2 → chunking → ChromaDB)
-- ChromaDB vector database with HuggingFace embeddings
-- Retrieval workflow (semantic search, top-k evidence selection)
-- LangGraph multi-agent workflow (4-node StateGraph)
-- Reviewer agent with confidence scoring and retry logic
-- FastAPI backend (`/audit` endpoint)
-- Streamlit frontend
+- PDF ingestion pipeline with 150-char chunk filter
+- Individual APP chapter PDFs (APP 1–13) + ASIC RG 271
+- OpenAI embeddings (text-embedding-3-small)
+- Per-sentence retrieval with query rewriting
+- LangGraph 4-node multi-agent workflow
+- Reviewer agent with confidence scoring and retry with feedback
+- FastAPI backend (`/audit`, `/audit/file`, `/chat` endpoints)
+- Streamlit frontend with file upload, paste text, report display, chat interface
+- Confidence badge (colour-coded), download report button
 
 **Planned**
-- PDF upload (file upload UI instead of raw text input)
-- DOCX upload support
-- Chat history / conversational audit interface
 - Docker containerisation
 - GitHub Actions CI/CD pipeline
 - LangSmith tracing and observability
