@@ -44,21 +44,33 @@ def _draft_sentences(draft: str) -> list[str]:
     return sentences[:_MAX_SENTENCES]
 
 
-async def _rewrite_queries(sentences: list[str]) -> list[str]:
+async def _rewrite_queries(
+    sentences: list[str],
+    reviewer_feedback: str = "",
+) -> list[str]:
     """
     Rewrites plain-English policy sentences into precise legal search queries.
-    One LLM call for all sentences — maps "share" → "disclose", etc.
+    On retry, includes reviewer feedback so queries target what was missing.
     """
     llm = get_llm()
 
     numbered = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(sentences))
+
+    feedback_section = ""
+    if reviewer_feedback:
+        feedback_section = f"""
+Previous retrieval was insufficient. Reviewer feedback:
+{reviewer_feedback}
+
+Use this feedback to generate more specific queries that target the missing evidence.
+"""
 
     prompt = f"""You are a legal search query optimizer for Australian Privacy Principles (APP).
 
 Convert each policy sentence into a precise regulatory search query using legal terminology.
 Use terms like: "use or disclose", "secondary purpose", "APP 6", "collection notice APP 5",
 "security obligation APP 11", "access to personal information APP 12", etc.
-
+{feedback_section}
 Output ONLY the rewritten queries, one per line, numbered the same way. No explanation.
 
 Policy sentences:
@@ -88,8 +100,13 @@ async def retrieve_rules_node(state: AuditState) -> AuditState:
     if not sentences:
         sentences = [state["draft"]]
 
+    is_retry = state.get("retry_count", 0) > 0
+    reviewer_feedback = state.get("reviewer_notes", "") if is_retry else ""
+
     print("\n========== QUERY REWRITING ==========")
-    rewritten = await _rewrite_queries(sentences)
+    if is_retry:
+        print("  [RETRY] Using reviewer feedback to improve queries\n")
+    rewritten = await _rewrite_queries(sentences, reviewer_feedback)
     for orig, rewr in zip(sentences, rewritten):
         print(f"  Original : {orig}")
         print(f"  Rewritten: {rewr}")
