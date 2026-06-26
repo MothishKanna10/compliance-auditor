@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: compliance-auditor-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    startCommand: sh start_backend.sh
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: openai
+      - key: LLM_MODEL
+        value: gpt-4o-mini
+      - key: EMBEDDING_PROVIDER
+        value: openai
+      - key: EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: CHUNK_SIZE
+        value: "1000"
+      - key: CHUNK_OVERLAP
+        value: "150"
+      - key: TOP_K
+        value: "5"
+      - key: CHROMA_PERSIST_DIR
+        value: /data/chroma_db
+      - key: CHROMA_COLLECTION_NAME
+        value: compliance_rules
+      - key: DATA_DIR
+        value: data
+    disk:
+      name: chroma-storage
+      mountPath: /data
+      sizeGB: 1
+
+  - type: web
+    name: compliance-auditor-frontend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    startCommand: streamlit run ui.py --server.port $PORT --server.address 0.0.0.0
+    envVars:
+      - key: API_URL
+        fromService:
+          type: web
+          name: compliance-auditor-backend
+          property: url
