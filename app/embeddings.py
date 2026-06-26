@@ -1,4 +1,3 @@
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
 
 from app.config import settings
@@ -10,6 +9,7 @@ def get_embeddings():
             model=settings.embedding_model,
             api_key=settings.openai_api_key,
         )
+    from langchain_huggingface import HuggingFaceEmbeddings
     return HuggingFaceEmbeddings(
         model_name=settings.embedding_model,
     )

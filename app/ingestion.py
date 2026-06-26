@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from app.config import settings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from app.embeddings import get_embeddings
 from langchain_pinecone import PineconeVectorStore
