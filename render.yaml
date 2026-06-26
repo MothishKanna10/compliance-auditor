@@ -2,6 +2,7 @@ services:
   - type: web
     name: compliance-auditor-backend
     runtime: docker
+    plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .
     dockerCommand: sh start_backend.sh
@@ -36,6 +37,7 @@ services:
   - type: web
     name: compliance-auditor-frontend
     runtime: docker
+    plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .
     dockerCommand: streamlit run ui.py --server.port $PORT --server.address 0.0.0.0
