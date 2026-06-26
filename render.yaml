@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    startCommand: sh start_backend.sh
+    dockerCommand: sh start_backend.sh
     envVars:
       - key: OPENAI_API_KEY
         sync: false
@@ -38,10 +38,10 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    startCommand: streamlit run ui.py --server.port $PORT --server.address 0.0.0.0
+    dockerCommand: streamlit run ui.py --server.port $PORT --server.address 0.0.0.0
     envVars:
       - key: API_URL
         fromService:
           type: web
           name: compliance-auditor-backend
-          property: url
+          property: host

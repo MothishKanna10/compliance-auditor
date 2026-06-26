@@ -3,7 +3,8 @@ import os
 import requests
 import streamlit as st
 
-BASE_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
+_api_url = os.environ.get("API_URL", "http://127.0.0.1:8000")
+BASE_URL = _api_url if _api_url.startswith("http") else f"https://{_api_url}"
 
 st.set_page_config(
     page_title="AI Compliance Auditor",
