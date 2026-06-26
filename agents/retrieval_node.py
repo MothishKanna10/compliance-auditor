@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from langchain_chroma import Chroma
+from langchain_pinecone import PineconeVectorStore
 
 from agents.agent_state import AuditState, Evidence
 from app.config import settings
@@ -12,13 +12,13 @@ from app.llm import get_llm
 _MAX_SENTENCES = 40
 
 
-def get_vector_store() -> Chroma:
+def get_vector_store() -> PineconeVectorStore:
     embeddings = get_embeddings()
 
-    return Chroma(
-        collection_name=settings.collection_name,
-        persist_directory=settings.chroma_dir,
-        embedding_function=embeddings,
+    return PineconeVectorStore(
+        index_name=settings.pinecone_index,
+        embedding=embeddings,
+        pinecone_api_key=settings.pinecone_api_key,
     )
 
 

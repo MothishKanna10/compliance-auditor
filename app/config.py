@@ -13,8 +13,8 @@ class Settings:
     llm_provider:str
     embedding_provider:str
     llm_model: str
-    chroma_dir: str
-    collection_name: str
+    pinecone_api_key: str
+    pinecone_index: str
     chunk_size: int
     chunk_overlap: int
     top_k: int
@@ -32,14 +32,8 @@ settings = Settings(
         "LLM_MODEL",
         "llama3.2:3b",
     ),
-    chroma_dir=os.getenv(
-        "CHROMA_PERSIST_DIR",
-        "chroma_db",
-    ),
-    collection_name=os.getenv(
-        "CHROMA_COLLECTION_NAME",
-        "compliance_rules",
-    ),
+    pinecone_api_key=os.getenv("PINECONE_API_KEY", ""),
+    pinecone_index=os.getenv("PINECONE_INDEX", "compliance-rules"),
     chunk_size=int(
         os.getenv(
             "CHUNK_SIZE",

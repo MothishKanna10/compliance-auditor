@@ -1,4 +1,5 @@
 import os
+import re
 
 import requests
 import streamlit as st
@@ -36,7 +37,8 @@ with st.sidebar:
 4. Ask follow-up questions in the chat
 """)
     st.markdown("---")
-    st.caption("Powered by GPT-4o-mini · ChromaDB · LangGraph")
+    st.caption("Powered by GPT-4o-mini · Pinecone · LangGraph")
+
 
 # --- Session state ---
 if "report" not in st.session_state:
@@ -58,15 +60,118 @@ def confidence_badge(confidence: str) -> None:
     colours = {"High": "#28a745", "Medium": "#fd7e14", "Low": "#dc3545"}
     colour = colours.get(confidence, "#6c757d")
     st.markdown(
-        f"""
-        <div style="display:inline-block; background-color:{colour};
+        f"""<div style="display:inline-block; background-color:{colour};
         color:white; padding:6px 18px; border-radius:20px;
         font-weight:bold; font-size:16px;">
-        {confidence} Confidence
-        </div>
-        """,
+        {confidence} Confidence</div>""",
         unsafe_allow_html=True,
     )
+
+
+def _severity_badge(severity: str) -> str:
+    colours = {"High": "#dc3545", "Medium": "#fd7e14", "Low": "#28a745"}
+    colour = colours.get(severity, "#6c757d")
+    return (
+        f'<span style="background-color:{colour}; color:white; '
+        f'padding:3px 14px; border-radius:12px; font-size:13px; font-weight:bold;">'
+        f'{severity}</span>'
+    )
+
+
+def _parse_fields(block: str) -> dict:
+    keys = [
+        "Draft Sentence", "Regulation", "Evidence Source", "Evidence Page",
+        "Issue", "Severity", "Recommendation", "Reasoning",
+    ]
+    fields: dict[str, str] = {}
+    current_key: str | None = None
+    current_val: list[str] = []
+
+    for line in block.splitlines():
+        matched = False
+        for key in keys:
+            if line.strip().startswith(f"{key}:"):
+                if current_key:
+                    fields[current_key] = " ".join(current_val).strip()
+                current_key = key
+                current_val = [line.strip()[len(key) + 1:].strip()]
+                matched = True
+                break
+        if not matched and current_key and line.strip():
+            current_val.append(line.strip())
+
+    if current_key:
+        fields[current_key] = " ".join(current_val).strip()
+
+    return fields
+
+
+def render_report(report: str) -> None:
+    # Split into findings and reviewer sections
+    reviewer_text = ""
+    if "REVIEWER ASSESSMENT" in report:
+        findings_part, _, reviewer_raw = report.partition("REVIEWER ASSESSMENT")
+        reviewer_text = re.sub(r"^[-=\s]+", "", reviewer_raw).strip()
+    else:
+        findings_part = report
+
+    # Extract summary
+    summary = ""
+    if "SUMMARY" in findings_part:
+        findings_part, _, summary_raw = findings_part.partition("SUMMARY")
+        summary = re.sub(r"^[-=\s]+", "", summary_raw).strip()
+
+    # Parse individual finding blocks
+    blocks: list[str] = []
+    current: list[str] = []
+    for line in findings_part.splitlines():
+        if re.match(r"\s*Draft Sentence:", line) and current:
+            blocks.append("\n".join(current))
+            current = [line]
+        elif re.match(r"\s*Draft Sentence:", line):
+            current = [line]
+        elif current:
+            current.append(line)
+    if current:
+        blocks.append("\n".join(current))
+
+    # Render findings
+    if blocks:
+        st.markdown("### Findings")
+        for i, block in enumerate(blocks, 1):
+            f = _parse_fields(block)
+            severity = f.get("Severity", "Unknown")
+            regulation = f.get("Regulation", "")
+            sentence = f.get("Draft Sentence", "")
+            issue = f.get("Issue", "")
+            recommendation = f.get("Recommendation", "")
+            evidence_source = f.get("Evidence Source", "")
+            evidence_page = f.get("Evidence Page", "")
+
+            with st.expander(f"Finding {i} — {regulation}", expanded=True):
+                col_a, col_b = st.columns([5, 1])
+                with col_a:
+                    st.markdown(f"**Sentence audited:** *{sentence}*")
+                with col_b:
+                    st.markdown(_severity_badge(severity), unsafe_allow_html=True)
+                st.markdown(f"**Issue:** {issue}")
+                st.markdown(f"**Recommendation:** {recommendation}")
+                if evidence_source:
+                    st.caption(f"Evidence: {os.path.basename(evidence_source)} — Page {evidence_page}")
+
+    if summary:
+        st.info(f"**Summary:** {summary}")
+
+    # Reviewer assessment
+    if reviewer_text:
+        st.markdown("---")
+        st.markdown("### Reviewer Assessment")
+        conf_match = re.search(r"Confidence:\s*(.+)", reviewer_text)
+        reason_match = re.search(r"Reason:\s*([\s\S]+)", reviewer_text)
+        if conf_match:
+            st.markdown(f"**Confidence:** {conf_match.group(1).strip()}")
+        if reason_match:
+            st.markdown(f"**Reason:** {reason_match.group(1).strip()}")
 
 
 # --- Header ---
@@ -143,12 +248,9 @@ if st.session_state.report:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    with st.container(border=True):
-        st.markdown(
-            f"<pre style='white-space: pre-wrap; font-size: 14px; line-height: 1.6;'>{st.session_state.report}</pre>",
-            unsafe_allow_html=True,
-        )
+    render_report(st.session_state.report)
 
+    st.markdown("<br>", unsafe_allow_html=True)
     st.download_button(
         label="⬇️ Download Report",
         data=st.session_state.report,

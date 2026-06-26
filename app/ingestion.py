@@ -5,7 +5,8 @@ from app.config import settings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from app.embeddings import get_embeddings
-from langchain_chroma import Chroma
+from langchain_pinecone import PineconeVectorStore
+from pinecone import Pinecone
 
 
 def load_documents(data_dir: str) -> list:
@@ -26,19 +27,24 @@ def split_documents(documents: list) -> list:
         chunk_overlap=settings.chunk_overlap,
     )
     chunks = splitter.split_documents(documents)
-    # Filter out title pages, version headers, and table of contents entries
-    # that contain no actual obligation text (less than 150 meaningful characters)
     return [c for c in chunks if len(c.page_content.strip()) >= 150]
 
 
 def create_vector_store(chunks: list) -> None:
     embeddings = get_embeddings()
 
-    vector_store = Chroma.from_documents(
+    pc = Pinecone(api_key=settings.pinecone_api_key)
+    index = pc.Index(settings.pinecone_index)
+
+    stats = index.describe_index_stats()
+    if stats.total_vector_count > 0:
+        index.delete(delete_all=True)
+
+    PineconeVectorStore.from_documents(
         documents=chunks,
         embedding=embeddings,
-        persist_directory=settings.chroma_dir,
-        collection_name=settings.collection_name,
+        index_name=settings.pinecone_index,
+        pinecone_api_key=settings.pinecone_api_key,
     )
 
     print("Vector database created successfully")
@@ -46,9 +52,7 @@ def create_vector_store(chunks: list) -> None:
 
 def main() -> None:
     print("Loading PDFs...")
-    documents = load_documents(
-    os.getenv("DATA_DIR", "data")
-)
+    documents = load_documents(os.getenv("DATA_DIR", "data"))
 
     print(f"Pages loaded: {len(documents)}")
 
@@ -57,7 +61,7 @@ def main() -> None:
 
     print(f"Chunks created: {len(chunks)}")
 
-    print("Creating local embeddings and storing in ChromaDB...")
+    print("Creating embeddings and storing in Pinecone...")
     create_vector_store(chunks)
 
     print("Ingestion completed")
