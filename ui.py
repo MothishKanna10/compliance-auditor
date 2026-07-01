@@ -202,7 +202,11 @@ with upload_tab:
             )
 
         if response.status_code != 200:
-            st.error(f"❌ Error: {response.json().get('detail', response.text)}")
+            try:
+                detail = response.json().get('detail', response.text)
+            except Exception:
+                detail = "The backend is still starting up. Please wait 30 seconds and try again."
+            st.error(f"❌ {detail}")
             st.stop()
 
         run_audit_from_response(response)
@@ -228,7 +232,11 @@ with paste_tab:
             )
 
         if response.status_code != 200:
-            st.error(f"❌ Error: {response.text}")
+            try:
+                detail = response.json().get('detail', response.text)
+            except Exception:
+                detail = "The backend is still starting up. Please wait 30 seconds and try again."
+            st.error(f"❌ {detail}")
             st.stop()
 
         run_audit_from_response(response)
