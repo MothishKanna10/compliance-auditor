@@ -42,4 +42,4 @@ services:
         fromService:
           type: web
           name: compliance-auditor-backend
-          property: host
+          property: hostWithScheme
